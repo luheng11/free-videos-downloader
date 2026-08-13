@@ -41,12 +41,15 @@ export const useDownloadStore = defineStore("download", () => {
       triggerDownload(blob, filename);
 
       // 记录历史
-      addHistory({
-        title: videoInfo.value?.title || url,
-        url,
-        formatId: formatId || "best",
-        timestamp: Date.now(),
-      });
+      addHistory(
+        {
+          title: videoInfo.value?.title || url,
+          url,
+          formatId: formatId || "best",
+          timestamp: Date.now(),
+        },
+        history,
+      );
     } catch (e: any) {
       error.value = e?.response?.data?.detail || e?.message || "下载失败";
     } finally {
@@ -73,12 +76,15 @@ export const useDownloadStore = defineStore("download", () => {
           link.href = (import.meta.env.VITE_API_BASE || "http://localhost:8000") + fileUrl;
           link.download = filename;
           link.click();
-          addHistory({
-            title: videoInfo.value?.title || url,
-            url,
-            formatId: formatId || "best",
-            timestamp: Date.now(),
-          });
+          addHistory(
+            {
+              title: videoInfo.value?.title || url,
+              url,
+              formatId: formatId || "best",
+              timestamp: Date.now(),
+            },
+            history,
+          );
           break;
         }
         if (t.status === "failed") {
@@ -130,7 +136,7 @@ function loadHistory(): HistoryItem[] {
   }
 }
 
-function addHistory(item: HistoryItem) {
+function addHistory(item: HistoryItem, history: { value: HistoryItem[] }) {
   const list = loadHistory();
   list.unshift(item);
   history.value = list.slice(0, 50);

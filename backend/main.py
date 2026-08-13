@@ -5,11 +5,20 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except Exception:  # pragma: no cover - dotenv 缺失时使用系统环境变量
+    pass
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from services.ai_service import AIServiceError, summarize_video, translate_video
+from services.manhua import generate_manhua
 from services.cleanup import cleanup_loop
 from services.download_service import smart_download
 from services.downloader import DOWNLOADS_DIR, parse_video
@@ -57,6 +66,21 @@ class DownloadRequest(BaseModel):
 class TaskSubmitRequest(BaseModel):
     url: str
     format_id: str | None = None
+
+
+class SummaryRequest(BaseModel):
+    url: str
+
+
+class TranslateRequest(BaseModel):
+    url: str
+    target_lang: str = "zh"
+
+
+class ManhuaRequest(BaseModel):
+    url: str
+    style: str = "guoman"
+    panels: int = 8
 
 
 # ---------- 核心接口 ----------
@@ -123,6 +147,47 @@ async def api_get_file(task_id: str):
         raise HTTPException(status_code=404, detail="文件信息缺失")
     return {"success": True, "data": {"url": f"/files/{task.filename}", "filename": task.filename}}
 
+
+# ---------- AI 接口 ----------
+
+
+@app.post("/api/ai/summary")
+async def api_ai_summary(req: SummaryRequest):
+    """AI 视频总结：基于字幕调用大模型生成中文总结。"""
+    try:
+        data = await asyncio.to_thread(summarize_video, req.url)
+        return {"success": True, "data": data}
+    except AIServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logging.getLogger("uvicorn.error").exception("视频总结异常")
+        raise HTTPException(status_code=500, detail=f"视频总结失败: {exc}")
+
+
+@app.post("/api/ai/translate")
+async def api_ai_translate(req: TranslateRequest):
+    """AI 字幕翻译：将视频字幕翻译为目标语言，保留时间轴。"""
+    try:
+        data = await asyncio.to_thread(translate_video, req.url, req.target_lang)
+        return {"success": True, "data": data}
+    except AIServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logging.getLogger("uvicorn.error").exception("字幕翻译异常")
+        raise HTTPException(status_code=500, detail=f"字幕翻译失败: {exc}")
+
+
+@app.post("/api/ai/manhua")
+async def api_ai_manhua(req: ManhuaRequest):
+    """AI 漫剧创作：基于视频内容（字幕/转写+关键帧视觉）生成漫剧脚本。"""
+    try:
+        data = await asyncio.to_thread(generate_manhua, req.url, req.style, req.panels)
+        return {"success": True, "data": data}
+    except AIServiceError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logging.getLogger("uvicorn.error").exception("漫剧生成异常")
+        raise HTTPException(status_code=500, detail=f"漫剧生成失败: {exc}")
 
 if __name__ == "__main__":
     import uvicorn

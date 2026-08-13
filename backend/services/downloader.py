@@ -10,6 +10,13 @@ from typing import Any
 
 from yt_dlp import YoutubeDL
 
+from .douyin import (
+    download_douyin,
+    get_douyin_play_url,
+    is_douyin_url,
+    parse_douyin,
+)
+
 logger = logging.getLogger("uvicorn.error")
 
 DOWNLOADS_DIR = Path(__file__).resolve().parent.parent / "downloads"
@@ -36,6 +43,9 @@ def _build_resolution(f: dict[str, Any]) -> str:
 
 def parse_video(url: str) -> dict[str, Any]:
     """解析视频元数据（不下载），返回前端需要的精简字段。"""
+    # 抖音专用模块（无需 cookie）
+    if is_douyin_url(url):
+        return parse_douyin(url)
     with YoutubeDL(_default_parse_opts()) as ydl:
         info = ydl.extract_info(url, download=False)
         info = ydl.sanitize_info(info)
@@ -83,6 +93,9 @@ def parse_video(url: str) -> dict[str, Any]:
 
 def get_direct_url(url: str, format_id: str | None = None) -> str | None:
     """获取视频直链（不下载），供智能下载策略判断使用。"""
+    # 抖音直接返回无水印播放链
+    if is_douyin_url(url):
+        return get_douyin_play_url(url)
     opts = _default_parse_opts()
     if format_id:
         opts["format"] = format_id
@@ -102,6 +115,9 @@ def get_direct_url(url: str, format_id: str | None = None) -> str | None:
 
 def download_video(url: str, format_id: str | None, task_id: str) -> str:
     """服务器代理下载到本地临时目录，返回文件路径。"""
+    # 抖音专用模块（服务端代理下载）
+    if is_douyin_url(url):
+        return download_douyin(url, task_id)
     out_path = DOWNLOADS_DIR / f"{task_id}.%(ext)s"
     opts: dict[str, Any] = {
         "format": format_id or "best",

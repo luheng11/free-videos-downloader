@@ -1,7 +1,9 @@
 import axios from "axios";
 
+export const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || "http://localhost:8000",
+  baseURL: API_BASE,
   timeout: 120000,
 });
 
@@ -78,5 +80,87 @@ export async function listTasks(): Promise<TaskInfo[]> {
 
 export async function getFileUrl(taskId: string): Promise<{ url: string; filename: string }> {
   const res = await api.get(`/api/file/${taskId}`);
+  return res.data.data;
+}
+
+export interface AISummaryResult {
+  title: string | null;
+  summary: string;
+  subtitle_lang: string;
+}
+
+export interface SubtitleSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+export interface AITranslateResult {
+  title: string | null;
+  target_lang: string;
+  segments: SubtitleSegment[];
+}
+
+export async function summarizeVideo(url: string): Promise<AISummaryResult> {
+  const res = await api.post("/api/ai/summary", { url }, { timeout: 180000 });
+  return res.data.data;
+}
+
+export async function translateSubtitles(
+  url: string,
+  targetLang: string,
+): Promise<AITranslateResult> {
+  const res = await api.post(
+    "/api/ai/translate",
+    { url, target_lang: targetLang },
+    { timeout: 180000 },
+  );
+  return res.data.data;
+}
+
+
+
+export interface ReferenceFrame {
+  time: number;
+  url: string;
+}
+
+export interface ManhuaCharacter {
+  name: string;
+  role: string;
+  desc: string;
+}
+
+export interface ManhuaPanel {
+  index: number;
+  time: number;
+  scene: string;
+  dialogue: string;
+  narration: string;
+  emotion: string;
+  visual: string;
+}
+
+export interface ManhuaResult {
+  title: string;
+  style: string;
+  panels_count: number;
+  synopsis: string;
+  characters: ManhuaCharacter[];
+  panels: ManhuaPanel[];
+  reference_frames?: ReferenceFrame[];
+  generated_at: number;
+}
+
+export async function generateManhua(
+  url: string,
+  style: string,
+  panels: number,
+): Promise<ManhuaResult> {
+  const res = await api.post(
+    "/api/ai/manhua",
+    { url, style, panels },
+    { timeout: 300000 },
+  );
   return res.data.data;
 }
